@@ -4,12 +4,12 @@ import {
     event_types,
     getRequestHeaders,
     saveSettingsDebounced,
-} from '../../../script.js';
+} from '../../../../script.js';
 import {
     extension_settings,
     renderExtensionTemplateAsync,
-} from '../../extensions.js';
-import { dragElement } from '../../RossAscends-mods.js';
+} from '../../../extensions.js';
+import { dragElement } from '../../../RossAscends-mods.js';
 
 const EXTENSION_NAME = 'third-party/ST-keyword-image-trigger';
 const SETTINGS_KEY = 'keywordImageTrigger';
