@@ -1,0 +1,61 @@
+﻿<div class="inline-drawer">
+    <div class="inline-drawer-toggle inline-drawer-header">
+        <b>Keyword Image Trigger</b>
+        <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+    </div>
+    <div class="inline-drawer-content">
+        <div id="kit_container" class="kit-settings">
+            <p class="kit-help">
+                上传图片并绑定触发词。插件会检查最近几条消息中的词符，命中后把对应图片追加到当前消息末尾。
+            </p>
+
+            <div class="kit-row">
+                <label for="kit_enabled" class="checkbox_label">
+                    <input id="kit_enabled" type="checkbox" />
+                    启用触发器
+                </label>
+            </div>
+
+            <div class="kit-grid">
+                <label for="kit_depth">检测深度</label>
+                <input id="kit_depth" class="text_pole" type="number" min="1" max="50" step="1" />
+
+                <label for="kit_max_width">图片最大宽度</label>
+                <input id="kit_max_width" class="text_pole" type="number" min="80" max="1200" step="10" />
+
+                <label for="kit_bg_color">背景框颜色</label>
+                <input id="kit_bg_color" class="kit-color-input" type="color" />
+            </div>
+
+            <div class="kit-divider"></div>
+
+            <div class="kit-upload">
+                <div class="kit-grid">
+                    <label for="kit_keyword">触发词</label>
+                    <input id="kit_keyword" class="text_pole" type="text" placeholder="例如：史蒂夫" />
+                </div>
+                <div class="kit-upload-row">
+                    <input id="kit_file" class="kit-hidden-file" type="file" accept="image/*" />
+                    <label for="kit_file" id="kit_pick_file" class="menu_button" tabindex="0">选择图片</label>
+                    <span id="kit_file_name" class="kit-file-name">未选择文件</span>
+                    <button id="kit_upload" class="menu_button" type="button">上传图片</button>
+                </div>
+                <div id="kit_server_status" class="kit-help"></div>
+            </div>
+
+            <div class="kit-divider"></div>
+
+            <div class="kit-list-header">
+                <span>已上传条目</span>
+                <button id="kit_refresh" class="menu_button menu_button_icon" type="button" title="刷新">
+                    <i class="fa-solid fa-rotate"></i>
+                </button>
+            </div>
+            <div class="kit-entry-search-row">
+                <input id="kit_entry_search" class="text_pole" type="text" placeholder="搜索词符名称" autocomplete="off" />
+            </div>
+            <div id="kit_entries" class="kit-entry-list"></div>
+        </div>
+    </div>
+</div>
+

@@ -1,0 +1,11 @@
+﻿{
+    "display_name": "Keyword Image Trigger",
+    "loading_order": 56,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Nulska",
+    "version": "1.0.0",
+    "homePage": "https://github.com/SillyTavern/SillyTavern"
+}
