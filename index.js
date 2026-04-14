@@ -11,7 +11,7 @@ import {
 } from '../../extensions.js';
 import { dragElement } from '../../RossAscends-mods.js';
 
-const EXTENSION_NAME = 'keyword-image-trigger';
+const EXTENSION_NAME = 'third-party/ST-keyword-image-trigger';
 const SETTINGS_KEY = 'keywordImageTrigger';
 const SERVER_PLUGIN_ID = 'keyword-image-trigger';
 const API_BASE = `/api/plugins/${SERVER_PLUGIN_ID}`;
