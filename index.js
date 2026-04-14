@@ -1,4 +1,4 @@
-﻿import {
+import {
     chat,
     eventSource,
     event_types,
