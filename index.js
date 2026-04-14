@@ -22,6 +22,7 @@ const PREVIEW_ANIMATION_MS = 125;
 const defaultSettings = {
     enabled: true,
     detectionDepth: 3,
+    displayDepth: 50,
     imageMaxWidth: 240,
     cardBackgroundColor: '#1f2937',
 };
@@ -31,6 +32,11 @@ let serverAvailable = false;
 let serverWarningShown = false;
 let entrySearchTerm = '';
 
+function clampInteger(value, minimum, maximum, fallback) {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? Math.min(maximum, Math.max(minimum, parsed)) : fallback;
+}
+
 function ensureSettings() {
     extension_settings[SETTINGS_KEY] = extension_settings[SETTINGS_KEY] || {};
     const settings = extension_settings[SETTINGS_KEY];
@@ -39,11 +45,9 @@ function ensureSettings() {
         settings.enabled = defaultSettings.enabled;
     }
 
-    const depth = Number.parseInt(settings.detectionDepth, 10);
-    settings.detectionDepth = Number.isFinite(depth) ? Math.min(50, Math.max(1, depth)) : defaultSettings.detectionDepth;
-
-    const maxWidth = Number.parseInt(settings.imageMaxWidth, 10);
-    settings.imageMaxWidth = Number.isFinite(maxWidth) ? Math.min(1200, Math.max(80, maxWidth)) : defaultSettings.imageMaxWidth;
+    settings.detectionDepth = clampInteger(settings.detectionDepth, 1, 50, defaultSettings.detectionDepth);
+    settings.displayDepth = clampInteger(settings.displayDepth, 0, 50, defaultSettings.displayDepth);
+    settings.imageMaxWidth = clampInteger(settings.imageMaxWidth, 80, 1200, defaultSettings.imageMaxWidth);
 
     if (typeof settings.cardBackgroundColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(settings.cardBackgroundColor)) {
         settings.cardBackgroundColor = defaultSettings.cardBackgroundColor;
@@ -67,9 +71,30 @@ function normalizedText(value) {
     return String(value ?? '').toLocaleLowerCase();
 }
 
+function getEntryKeywords(entry) {
+    if (Array.isArray(entry?.keywords) && entry.keywords.length > 0) {
+        return entry.keywords.map((keyword) => String(keyword).trim()).filter(Boolean);
+    }
+
+    const fallbackKeyword = String(entry?.keyword ?? '').trim();
+    return fallbackKeyword ? [fallbackKeyword] : [];
+}
+
+function getPrimaryKeyword(entry) {
+    return getEntryKeywords(entry)[0] ?? '';
+}
+
+function getSecondaryKeywords(entry) {
+    return getEntryKeywords(entry).slice(1);
+}
+
+function getKeywordsDisplay(entry) {
+    return getEntryKeywords(entry).join(', ');
+}
+
 function setServerStatus(message, isError = false) {
     const status = document.getElementById('kit_server_status');
-    if (!status) {
+    if (!(status instanceof HTMLElement)) {
         return;
     }
 
@@ -81,6 +106,11 @@ function getHeadersForFormData() {
     const headers = { ...getRequestHeaders() };
     delete headers['Content-Type'];
     return headers;
+}
+
+function buildEntryMeta(entry) {
+    const aliases = getSecondaryKeywords(entry);
+    return aliases.length > 0 ? aliases.join(', ') : entry.fileName;
 }
 
 async function fetchEntries() {
@@ -99,11 +129,11 @@ async function fetchEntries() {
     } catch (error) {
         entries = [];
         serverAvailable = false;
-        setServerStatus('未连接到 server plugin。请在 config.yaml 中启用 enableServerPlugins，然后重启 SillyTavern。', true);
+        setServerStatus('未连接到 server plugin。请确认已安装 plugins/keyword-image-trigger 并在 config.yaml 中启用 enableServerPlugins。', true);
 
         if (!serverWarningShown) {
             serverWarningShown = true;
-            toastr.warning('Keyword Image Trigger 需要启用 server plugin 才能上传和读取图片。');
+            toastr.warning('Keyword Image Trigger 需要 server plugin 才能上传和读取图片。');
         }
     }
 
@@ -113,7 +143,7 @@ async function fetchEntries() {
 
 function renderEntries() {
     const container = document.getElementById('kit_entries');
-    if (!container) {
+    if (!(container instanceof HTMLElement)) {
         return;
     }
 
@@ -124,7 +154,7 @@ function renderEntries() {
 
     const searchTerm = normalizedText(entrySearchTerm.trim());
     const filteredEntries = searchTerm
-        ? entries.filter((entry) => normalizedText(entry.keyword).includes(searchTerm))
+        ? entries.filter((entry) => getEntryKeywords(entry).some((keyword) => normalizedText(keyword).includes(searchTerm)))
         : entries;
 
     if (filteredEntries.length === 0) {
@@ -132,43 +162,74 @@ function renderEntries() {
         return;
     }
 
-    container.innerHTML = filteredEntries.map((entry) => `
-        <div class="kit-entry" data-kit-entry-id="${escapeHtml(entry.id)}">
-            <img src="${escapeHtml(entry.imageUrl)}" alt="${escapeHtml(entry.keyword)}" loading="lazy" />
-            <div class="kit-entry-main">
-                <div class="kit-entry-keyword">${escapeHtml(entry.keyword)}</div>
-                <div class="kit-entry-file">${escapeHtml(entry.fileName)}</div>
+    container.innerHTML = filteredEntries.map((entry) => {
+        const primaryKeyword = getPrimaryKeyword(entry);
+        const meta = buildEntryMeta(entry);
+        const title = `触发词: ${getKeywordsDisplay(entry)}\n文件: ${entry.fileName}`;
+
+        return `
+            <div class="kit-entry" data-kit-entry-id="${escapeHtml(entry.id)}" title="${escapeHtml(title)}">
+                <img src="${escapeHtml(entry.imageUrl)}" alt="${escapeHtml(primaryKeyword)}" loading="lazy" />
+                <div class="kit-entry-main">
+                    <div class="kit-entry-keyword">${escapeHtml(primaryKeyword)}</div>
+                    <div class="kit-entry-meta">${escapeHtml(meta)}</div>
+                </div>
+                <div class="kit-entry-actions">
+                    <button class="menu_button menu_button_icon kit-edit-entry" type="button" data-kit-edit="${escapeHtml(entry.id)}" title="编辑触发词" aria-label="编辑触发词">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button class="menu_button menu_button_icon kit-replace-entry" type="button" data-kit-replace="${escapeHtml(entry.id)}" title="替换图片" aria-label="替换图片">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </button>
+                    <button class="menu_button menu_button_icon kit-delete-entry" type="button" data-kit-delete="${escapeHtml(entry.id)}" title="删除条目" aria-label="删除条目">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
             </div>
-            <div class="kit-entry-actions">
-                <button class="menu_button menu_button_icon kit-replace-entry" type="button" data-kit-replace="${escapeHtml(entry.id)}" title="替换图片" aria-label="替换图片">
-                    <i class="fa-solid fa-rotate-right"></i>
-                </button>
-                <button class="menu_button menu_button_icon kit-delete-entry" type="button" data-kit-delete="${escapeHtml(entry.id)}" title="删除条目" aria-label="删除条目">
-                    <i class="fa-solid fa-trash-can"></i>
-                </button>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
+
+    container.querySelectorAll('.kit-edit-entry').forEach((button) => {
+        button.addEventListener('click', () => {
+            const id = button.getAttribute('data-kit-edit');
+            if (id) {
+                promptEditEntry(id);
+            }
+        });
+    });
 
     container.querySelectorAll('.kit-replace-entry').forEach((button) => {
         button.addEventListener('click', () => {
             const id = button.getAttribute('data-kit-replace');
-            if (!id) {
-                return;
+            if (id) {
+                promptReplaceEntry(id);
             }
-            promptReplaceEntry(id);
         });
     });
 
     container.querySelectorAll('.kit-delete-entry').forEach((button) => {
         button.addEventListener('click', async () => {
             const id = button.getAttribute('data-kit-delete');
-            if (!id) {
-                return;
+            if (id) {
+                await deleteEntry(id);
             }
-            await deleteEntry(id);
         });
     });
+}
+
+function isWithinDisplayDepth(messageId) {
+    if (settings.displayDepth <= 0) {
+        return false;
+    }
+
+    const targetId = Number(messageId);
+    const lastMessageId = chat.length - 1;
+    if (!Number.isFinite(targetId) || targetId < 0 || lastMessageId < 0) {
+        return false;
+    }
+
+    const firstVisibleId = Math.max(0, lastMessageId - settings.displayDepth + 1);
+    return targetId >= firstVisibleId && targetId <= lastMessageId;
 }
 
 function findTriggeredEntries(messageId) {
@@ -196,7 +257,7 @@ function findTriggeredEntries(messageId) {
             .join('\n'),
     );
 
-    return entries.filter((entry) => combinedText.includes(normalizedText(entry.keyword)));
+    return entries.filter((entry) => getEntryKeywords(entry).some((keyword) => combinedText.includes(normalizedText(keyword))));
 }
 
 function closeImagePreview(immediate = false) {
@@ -230,7 +291,7 @@ function openImagePreview(entry) {
 
     const image = preview.find('.zoomed_avatar_img');
     image.attr('src', entry.imageUrl);
-    image.attr('alt', entry.keyword);
+    image.attr('alt', getPrimaryKeyword(entry));
     image.attr('data-izoomify-url', entry.imageUrl);
 
     $('body').append(preview);
@@ -259,6 +320,13 @@ function openImagePreview(entry) {
     });
 }
 
+function installInlineScrollGuard(element) {
+    const stopPropagation = (event) => event.stopPropagation();
+    ['pointerdown', 'pointermove', 'pointerup', 'touchstart', 'touchmove', 'touchend', 'mousedown', 'mousemove', 'mouseup', 'wheel'].forEach((eventName) => {
+        element.addEventListener(eventName, stopPropagation, { passive: eventName !== 'touchmove' });
+    });
+}
+
 function renderInlineImages(messageId) {
     const mesText = document.querySelector(`#chat .mes[mesid="${messageId}"] .mes_text`);
     if (!(mesText instanceof HTMLElement)) {
@@ -267,7 +335,7 @@ function renderInlineImages(messageId) {
 
     mesText.querySelector(`:scope > .${INLINE_CONTAINER_CLASS}`)?.remove();
 
-    if (!settings.enabled || !serverAvailable) {
+    if (!settings.enabled || !serverAvailable || !isWithinDisplayDepth(messageId)) {
         return;
     }
 
@@ -278,6 +346,7 @@ function renderInlineImages(messageId) {
 
     const wrapper = document.createElement('div');
     wrapper.className = INLINE_CONTAINER_CLASS;
+    installInlineScrollGuard(wrapper);
 
     for (const entry of matchedEntries) {
         const card = document.createElement('div');
@@ -288,12 +357,12 @@ function renderInlineImages(messageId) {
         const button = document.createElement('button');
         button.className = 'kit-inline-image-button';
         button.type = 'button';
-        button.title = `查看 ${entry.keyword}`;
+        button.title = `查看 ${getPrimaryKeyword(entry)}`;
 
         const image = document.createElement('img');
         image.className = 'kit-inline-image';
         image.src = entry.imageUrl;
-        image.alt = entry.keyword;
+        image.alt = getPrimaryKeyword(entry);
         image.loading = 'lazy';
         image.style.maxWidth = `${settings.imageMaxWidth}px`;
         image.style.width = 'auto';
@@ -301,7 +370,7 @@ function renderInlineImages(messageId) {
 
         const title = document.createElement('div');
         title.className = 'kit-inline-trigger';
-        title.textContent = entry.keyword;
+        title.textContent = getPrimaryKeyword(entry);
 
         button.addEventListener('click', () => openImagePreview(entry));
         button.appendChild(image);
@@ -311,6 +380,7 @@ function renderInlineImages(messageId) {
 
     mesText.appendChild(wrapper);
 }
+
 function scanVisibleMessages() {
     document.querySelectorAll('#chat .mes[mesid]').forEach((element) => {
         const messageId = element.getAttribute('mesid');
@@ -320,9 +390,9 @@ function scanVisibleMessages() {
     });
 }
 
-async function submitEntryImage(keyword, file, successMessage, failurePrefix) {
+async function submitEntryImage(rawKeywordInput, file, successMessage, failurePrefix) {
     const formData = new FormData();
-    formData.append('keyword', keyword);
+    formData.append('keyword', rawKeywordInput);
     formData.append('avatar', file);
 
     try {
@@ -355,10 +425,10 @@ async function uploadEntry() {
         return;
     }
 
-    const keyword = keywordInput.value.trim();
+    const rawKeywordInput = keywordInput.value.trim();
     const file = fileInput.files?.[0];
 
-    if (!keyword) {
+    if (!rawKeywordInput) {
         toastr.warning('请先输入触发词。');
         return;
     }
@@ -368,7 +438,7 @@ async function uploadEntry() {
         return;
     }
 
-    const uploaded = await submitEntryImage(keyword, file, '图片已上传。', '上传失败');
+    const uploaded = await submitEntryImage(rawKeywordInput, file, '图片已上传。', '上传失败');
     if (!uploaded) {
         return;
     }
@@ -390,7 +460,27 @@ async function replaceEntryImage(id, file) {
         return;
     }
 
-    await submitEntryImage(entry.keyword, file, `已替换 ${entry.keyword} 的图片。`, '替换失败');
+    await submitEntryImage(getKeywordsDisplay(entry), file, `已替换 ${getPrimaryKeyword(entry)} 的图片。`, '替换失败');
+}
+
+async function updateEntryKeywords(id, rawKeywordInput) {
+    try {
+        const response = await fetch(`${API_BASE}/entries/${encodeURIComponent(id)}`, {
+            method: 'PUT',
+            headers: getRequestHeaders(),
+            body: JSON.stringify({ keyword: rawKeywordInput }),
+        });
+
+        if (!response.ok) {
+            const message = await response.text();
+            throw new Error(message || `HTTP ${response.status}`);
+        }
+
+        toastr.success('触发词已更新。');
+        await fetchEntries();
+    } catch (error) {
+        toastr.error(`编辑触发词失败：${error.message}`);
+    }
 }
 
 function promptReplaceEntry(id) {
@@ -409,15 +499,34 @@ function promptReplaceEntry(id) {
         const file = picker.files?.[0];
         picker.remove();
 
-        if (!file) {
-            return;
+        if (file) {
+            await replaceEntryImage(id, file);
         }
-
-        await replaceEntryImage(id, file);
     }, { once: true });
 
     document.body.appendChild(picker);
     picker.click();
+}
+
+function promptEditEntry(id) {
+    const entry = entries.find((item) => item.id === id);
+    if (!entry) {
+        toastr.warning('未找到要编辑的条目。');
+        return;
+    }
+
+    const nextKeywords = window.prompt('编辑触发词，使用英文逗号分隔多个词。第一项会作为主词。', getKeywordsDisplay(entry));
+    if (nextKeywords === null) {
+        return;
+    }
+
+    const trimmedKeywords = nextKeywords.trim();
+    if (!trimmedKeywords) {
+        toastr.warning('触发词不能为空。');
+        return;
+    }
+
+    updateEntryKeywords(id, trimmedKeywords);
 }
 
 async function deleteEntry(id) {
@@ -442,6 +551,7 @@ async function deleteEntry(id) {
 function bindSettings() {
     const enabledInput = document.getElementById('kit_enabled');
     const depthInput = document.getElementById('kit_depth');
+    const displayDepthInput = document.getElementById('kit_display_depth');
     const maxWidthInput = document.getElementById('kit_max_width');
     const bgColorInput = document.getElementById('kit_bg_color');
     const fileInput = document.getElementById('kit_file');
@@ -452,6 +562,7 @@ function bindSettings() {
 
     if (!(enabledInput instanceof HTMLInputElement)
         || !(depthInput instanceof HTMLInputElement)
+        || !(displayDepthInput instanceof HTMLInputElement)
         || !(maxWidthInput instanceof HTMLInputElement)
         || !(bgColorInput instanceof HTMLInputElement)
         || !(fileInput instanceof HTMLInputElement)
@@ -464,6 +575,7 @@ function bindSettings() {
 
     enabledInput.checked = settings.enabled;
     depthInput.value = String(settings.detectionDepth);
+    displayDepthInput.value = String(settings.displayDepth);
     maxWidthInput.value = String(settings.imageMaxWidth);
     bgColorInput.value = settings.cardBackgroundColor;
     fileName.textContent = fileInput.files?.[0]?.name || '未选择文件';
@@ -476,16 +588,21 @@ function bindSettings() {
     });
 
     depthInput.addEventListener('change', () => {
-        const depth = Number.parseInt(depthInput.value, 10);
-        settings.detectionDepth = Number.isFinite(depth) ? Math.min(50, Math.max(1, depth)) : defaultSettings.detectionDepth;
+        settings.detectionDepth = clampInteger(depthInput.value, 1, 50, defaultSettings.detectionDepth);
         depthInput.value = String(settings.detectionDepth);
         saveSettingsDebounced();
         scanVisibleMessages();
     });
 
+    displayDepthInput.addEventListener('change', () => {
+        settings.displayDepth = clampInteger(displayDepthInput.value, 0, 50, defaultSettings.displayDepth);
+        displayDepthInput.value = String(settings.displayDepth);
+        saveSettingsDebounced();
+        scanVisibleMessages();
+    });
+
     maxWidthInput.addEventListener('change', () => {
-        const maxWidth = Number.parseInt(maxWidthInput.value, 10);
-        settings.imageMaxWidth = Number.isFinite(maxWidth) ? Math.min(1200, Math.max(80, maxWidth)) : defaultSettings.imageMaxWidth;
+        settings.imageMaxWidth = clampInteger(maxWidthInput.value, 80, 1200, defaultSettings.imageMaxWidth);
         maxWidthInput.value = String(settings.imageMaxWidth);
         saveSettingsDebounced();
         scanVisibleMessages();
@@ -534,11 +651,3 @@ eventSource.on(event_types.MESSAGE_SWIPED, (messageId) => renderInlineImages(mes
 eventSource.on(event_types.MESSAGE_DELETED, scheduleVisibleScan);
 eventSource.on(event_types.USER_MESSAGE_RENDERED, (messageId) => renderInlineImages(messageId));
 eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (messageId) => renderInlineImages(messageId));
-
-
-
-
-
-
-
-
