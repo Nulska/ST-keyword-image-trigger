@@ -4,12 +4,12 @@ import {
     event_types,
     getRequestHeaders,
     saveSettingsDebounced,
-} from '../../../script.js';
+} from '../../../../script.js';
 import {
     extension_settings,
     renderExtensionTemplateAsync,
-} from '../../extensions.js';
-import { dragElement } from '../../RossAscends-mods.js';
+} from '../../../extensions.js';
+import { dragElement } from '../../../RossAscends-mods.js';
 
 const EXTENSION_NAME = 'third-party/ST-keyword-image-trigger';
 const SETTINGS_KEY = 'keywordImageTrigger';
@@ -95,15 +95,15 @@ async function fetchEntries() {
 
         entries = await response.json();
         serverAvailable = true;
-        setServerStatus('Server plugin 已连接。');
+        setServerStatus('Server plugin 宸茶繛鎺ャ€?);
     } catch (error) {
         entries = [];
         serverAvailable = false;
-        setServerStatus('未连接到 server plugin。请在 config.yaml 中启用 enableServerPlugins，然后重启 SillyTavern。', true);
+        setServerStatus('鏈繛鎺ュ埌 server plugin銆傝鍦?config.yaml 涓惎鐢?enableServerPlugins锛岀劧鍚庨噸鍚?SillyTavern銆?, true);
 
         if (!serverWarningShown) {
             serverWarningShown = true;
-            toastr.warning('Keyword Image Trigger 需要启用 server plugin 才能上传和读取图片。');
+            toastr.warning('Keyword Image Trigger 闇€瑕佸惎鐢?server plugin 鎵嶈兘涓婁紶鍜岃鍙栧浘鐗囥€?);
         }
     }
 
@@ -118,7 +118,7 @@ function renderEntries() {
     }
 
     if (entries.length === 0) {
-        container.innerHTML = '<div class="kit-empty">还没有图片条目。</div>';
+        container.innerHTML = '<div class="kit-empty">杩樻病鏈夊浘鐗囨潯鐩€?/div>';
         return;
     }
 
@@ -128,7 +128,7 @@ function renderEntries() {
         : entries;
 
     if (filteredEntries.length === 0) {
-        container.innerHTML = '<div class="kit-empty">没有匹配的条目。</div>';
+        container.innerHTML = '<div class="kit-empty">娌℃湁鍖归厤鐨勬潯鐩€?/div>';
         return;
     }
 
@@ -140,10 +140,10 @@ function renderEntries() {
                 <div class="kit-entry-file">${escapeHtml(entry.fileName)}</div>
             </div>
             <div class="kit-entry-actions">
-                <button class="menu_button menu_button_icon kit-replace-entry" type="button" data-kit-replace="${escapeHtml(entry.id)}" title="替换图片" aria-label="替换图片">
+                <button class="menu_button menu_button_icon kit-replace-entry" type="button" data-kit-replace="${escapeHtml(entry.id)}" title="鏇挎崲鍥剧墖" aria-label="鏇挎崲鍥剧墖">
                     <i class="fa-solid fa-rotate-right"></i>
                 </button>
-                <button class="menu_button menu_button_icon kit-delete-entry" type="button" data-kit-delete="${escapeHtml(entry.id)}" title="删除条目" aria-label="删除条目">
+                <button class="menu_button menu_button_icon kit-delete-entry" type="button" data-kit-delete="${escapeHtml(entry.id)}" title="鍒犻櫎鏉＄洰" aria-label="鍒犻櫎鏉＄洰">
                     <i class="fa-solid fa-trash-can"></i>
                 </button>
             </div>
@@ -288,7 +288,7 @@ function renderInlineImages(messageId) {
         const button = document.createElement('button');
         button.className = 'kit-inline-image-button';
         button.type = 'button';
-        button.title = `查看 ${entry.keyword}`;
+        button.title = `鏌ョ湅 ${entry.keyword}`;
 
         const image = document.createElement('img');
         image.className = 'kit-inline-image';
@@ -341,7 +341,7 @@ async function submitEntryImage(keyword, file, successMessage, failurePrefix) {
         await fetchEntries();
         return true;
     } catch (error) {
-        toastr.error(`${failurePrefix}：${error.message}`);
+        toastr.error(`${failurePrefix}锛?{error.message}`);
         return false;
     }
 }
@@ -359,44 +359,44 @@ async function uploadEntry() {
     const file = fileInput.files?.[0];
 
     if (!keyword) {
-        toastr.warning('请先输入触发词。');
+        toastr.warning('璇峰厛杈撳叆瑙﹀彂璇嶃€?);
         return;
     }
 
     if (!file) {
-        toastr.warning('请先选择一张图片。');
+        toastr.warning('璇峰厛閫夋嫨涓€寮犲浘鐗囥€?);
         return;
     }
 
-    const uploaded = await submitEntryImage(keyword, file, '图片已上传。', '上传失败');
+    const uploaded = await submitEntryImage(keyword, file, '鍥剧墖宸蹭笂浼犮€?, '涓婁紶澶辫触');
     if (!uploaded) {
         return;
     }
 
     keywordInput.value = '';
     fileInput.value = '';
-    fileName.textContent = '未选择文件';
+    fileName.textContent = '鏈€夋嫨鏂囦欢';
 }
 
 async function replaceEntryImage(id, file) {
     const entry = entries.find((item) => item.id === id);
     if (!entry) {
-        toastr.warning('未找到要替换的条目。');
+        toastr.warning('鏈壘鍒拌鏇挎崲鐨勬潯鐩€?);
         return;
     }
 
     if (!file) {
-        toastr.warning('请先选择一张图片。');
+        toastr.warning('璇峰厛閫夋嫨涓€寮犲浘鐗囥€?);
         return;
     }
 
-    await submitEntryImage(entry.keyword, file, `已替换 ${entry.keyword} 的图片。`, '替换失败');
+    await submitEntryImage(entry.keyword, file, `宸叉浛鎹?${entry.keyword} 鐨勫浘鐗囥€俙, '鏇挎崲澶辫触');
 }
 
 function promptReplaceEntry(id) {
     const entry = entries.find((item) => item.id === id);
     if (!entry) {
-        toastr.warning('未找到要替换的条目。');
+        toastr.warning('鏈壘鍒拌鏇挎崲鐨勬潯鐩€?);
         return;
     }
 
@@ -432,10 +432,10 @@ async function deleteEntry(id) {
             throw new Error(message || `HTTP ${response.status}`);
         }
 
-        toastr.success('条目已删除。');
+        toastr.success('鏉＄洰宸插垹闄ゃ€?);
         await fetchEntries();
     } catch (error) {
-        toastr.error(`删除失败：${error.message}`);
+        toastr.error(`鍒犻櫎澶辫触锛?{error.message}`);
     }
 }
 
@@ -466,7 +466,7 @@ function bindSettings() {
     depthInput.value = String(settings.detectionDepth);
     maxWidthInput.value = String(settings.imageMaxWidth);
     bgColorInput.value = settings.cardBackgroundColor;
-    fileName.textContent = fileInput.files?.[0]?.name || '未选择文件';
+    fileName.textContent = fileInput.files?.[0]?.name || '鏈€夋嫨鏂囦欢';
     entrySearchInput.value = entrySearchTerm;
 
     enabledInput.addEventListener('change', () => {
@@ -498,7 +498,7 @@ function bindSettings() {
     });
 
     fileInput.addEventListener('change', () => {
-        fileName.textContent = fileInput.files?.[0]?.name || '未选择文件';
+        fileName.textContent = fileInput.files?.[0]?.name || '鏈€夋嫨鏂囦欢';
     });
 
     entrySearchInput.addEventListener('input', () => {
@@ -534,6 +534,7 @@ eventSource.on(event_types.MESSAGE_SWIPED, (messageId) => renderInlineImages(mes
 eventSource.on(event_types.MESSAGE_DELETED, scheduleVisibleScan);
 eventSource.on(event_types.USER_MESSAGE_RENDERED, (messageId) => renderInlineImages(messageId));
 eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (messageId) => renderInlineImages(messageId));
+
 
 
 
