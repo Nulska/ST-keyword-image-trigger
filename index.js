@@ -10,6 +10,7 @@ import {
     renderExtensionTemplateAsync,
 } from '../../../extensions.js';
 import { dragElement } from '../../../RossAscends-mods.js';
+import { Popup, POPUP_TYPE } from '../../../popup.js';
 import { getContext } from '../../../st-context.js';
 
 const EXTENSION_NAME = 'third-party/ST-keyword-image-trigger';
@@ -35,6 +36,7 @@ let characterEntries = [];
 let serverAvailable = false;
 let serverWarningShown = false;
 let entrySearchTerm = '';
+let imagePickerPopup = null;
 
 const clampInteger = (value, minimum, maximum, fallback) => {
     const parsed = Number.parseInt(value, 10);
@@ -76,6 +78,35 @@ const getDisplayedImage = (entry) => {
 function setDisplayedImageSlot(entry, slot) {
     settings.selectedImages[getEntryStorageKey(entry)] = Number(slot);
     saveSettingsDebounced();
+}
+
+function deleteDisplayedImageSelection(entry) {
+    const storageKey = getEntryStorageKey(entry);
+    if (!Object.prototype.hasOwnProperty.call(settings.selectedImages, storageKey)) {
+        return;
+    }
+
+    delete settings.selectedImages[storageKey];
+    saveSettingsDebounced();
+}
+
+function reconcileDisplayedImageSelectionAfterDelete(entry, deletedSlot) {
+    const storageKey = getEntryStorageKey(entry);
+    const currentSlot = Number(settings.selectedImages[storageKey]);
+    if (!Number.isFinite(currentSlot)) {
+        return;
+    }
+
+    if (currentSlot === deletedSlot) {
+        settings.selectedImages[storageKey] = Math.max(0, deletedSlot - 1);
+        saveSettingsDebounced();
+        return;
+    }
+
+    if (currentSlot > deletedSlot) {
+        settings.selectedImages[storageKey] = currentSlot - 1;
+        saveSettingsDebounced();
+    }
 }
 
 function getCurrentCharacterScopeInfo() {
@@ -249,6 +280,12 @@ const closeImagePicker = () => {
     document.documentElement.classList.remove('kit-image-picker-open');
     document.body.classList.remove('kit-image-picker-open');
     document.getElementById(IMAGE_PICKER_ID)?.remove();
+
+    const popup = imagePickerPopup;
+    imagePickerPopup = null;
+    if (popup) {
+        void popup.complete(null).catch(() => {});
+    }
 };
 
 function openImagePreview(entry) {
@@ -276,51 +313,103 @@ function openImagePicker(entry) {
     closeImagePicker();
     const images = getEntryImages(entry);
     if (images.length <= 1) return;
-    const overlay = document.createElement('div');
-    overlay.id = IMAGE_PICKER_ID;
-    overlay.className = 'kit-image-picker-backdrop';
-    const dialog = document.createElement('div');
-    dialog.className = 'kit-image-picker-dialog';
+
+    const panel = document.createElement('div');
+    panel.id = IMAGE_PICKER_ID;
+    panel.className = 'kit-image-picker-panel';
+
     const header = document.createElement('div');
     header.className = 'kit-image-picker-header';
+
     const title = document.createElement('div');
     title.className = 'kit-image-picker-title';
     title.textContent = `选择 ${getPrimaryKeyword(entry)} 的显示图片`;
+
     const closeButton = document.createElement('button');
     closeButton.className = 'menu_button menu_button_icon';
     closeButton.type = 'button';
     closeButton.innerHTML = '<i class="fa-solid fa-xmark"></i>';
-    closeButton.addEventListener('click', closeImagePicker);
+
     const grid = document.createElement('div');
     grid.className = 'kit-image-picker-grid';
     const selectedSlot = getDisplayedImage(entry)?.slot;
+
+    const popup = new Popup(panel, POPUP_TYPE.TEXT, '', {
+        okButton: '关闭',
+        cancelButton: false,
+        wide: true,
+        large: true,
+        allowVerticalScrolling: true,
+        animation: 'fast',
+        onOpen: () => {
+            popup.dlg.classList.add('kit-image-picker-popup');
+            document.documentElement.classList.add('kit-image-picker-open');
+            document.body.classList.add('kit-image-picker-open');
+        },
+        onClose: () => {
+            if (imagePickerPopup === popup) {
+                imagePickerPopup = null;
+            }
+            document.documentElement.classList.remove('kit-image-picker-open');
+            document.body.classList.remove('kit-image-picker-open');
+        },
+    });
+
+    closeButton.addEventListener('click', () => {
+        if (imagePickerPopup === popup) {
+            imagePickerPopup = null;
+        }
+        void popup.complete(null).catch(() => {});
+    });
+
     for (const image of images) {
+        const card = document.createElement('div');
+        card.className = 'kit-image-picker-card';
+
         const item = document.createElement('button');
         item.type = 'button';
         item.className = `kit-image-picker-item${Number(image.slot) === Number(selectedSlot) ? ' is-selected' : ''}`;
+
         const thumb = document.createElement('img');
         thumb.className = 'kit-image-picker-thumb';
         thumb.src = image.imageUrl;
         thumb.alt = `${getPrimaryKeyword(entry)} ${image.slot}`;
+
         const label = document.createElement('div');
         label.className = 'kit-image-picker-slot';
         label.textContent = image.slot === 0 ? '默认图' : `图片 ${image.slot}`;
+
         item.addEventListener('click', () => {
             setDisplayedImageSlot(entry, image.slot);
-            closeImagePicker();
+            if (imagePickerPopup === popup) {
+                imagePickerPopup = null;
+            }
+            void popup.complete(null).catch(() => {});
             renderEntries();
             scanVisibleMessages();
         });
-        item.append(thumb, label);
-        grid.appendChild(item);
-    }
-    header.append(title, closeButton);
-    dialog.append(header, grid);
-    overlay.appendChild(dialog);
-    overlay.addEventListener('click', (event) => { if (event.target === overlay) closeImagePicker(); });
-    document.body.appendChild(overlay);
-}
 
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'menu_button menu_button_icon kit-image-picker-delete';
+        deleteButton.title = image.slot === 0 && images.length === 1 ? '删除最后一张图片并移除条目' : '删除这张图片';
+        deleteButton.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+        deleteButton.addEventListener('click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            await deleteEntryImage(entry, image.slot, popup);
+        });
+
+        item.append(thumb, label);
+        card.append(item, deleteButton);
+        grid.appendChild(card);
+    }
+
+    header.append(title, closeButton);
+    panel.append(header, grid);
+    imagePickerPopup = popup;
+    void popup.show();
+}
 function installInlineScrollGuard(element) {
     let touchStartX = 0;
     let touchStartY = 0;
@@ -437,6 +526,37 @@ async function appendEntryImage(scope, id, characterKey, file) {
         await fetchEntries();
     } catch (error) {
         toastr.error(`追加图片失败：${error.message}`);
+    }
+}
+async function deleteEntryImage(entry, slot, popup = null) {
+    try {
+        const url = new URL(`${API_BASE}/entries/${encodeURIComponent(entry.id)}/images/${encodeURIComponent(slot)}`, window.location.origin);
+        url.searchParams.set('scope', entry.scope || 'global');
+        if (entry.scope === 'character') url.searchParams.set('characterKey', entry.characterKey || '');
+        const response = await fetch(url.toString(), { method: 'DELETE', headers: getRequestHeaders() });
+        if (!response.ok) throw new Error(await getResponseErrorText(response, 'DELETE /entries/:id/images/:slot'));
+
+        const payload = await response.json();
+        if (payload?.deletedEntry) {
+            deleteDisplayedImageSelection(entry);
+        } else {
+            reconcileDisplayedImageSelectionAfterDelete(entry, Number(payload?.deletedSlot ?? slot));
+        }
+
+        if (popup && imagePickerPopup === popup) {
+            imagePickerPopup = null;
+            void popup.complete(null).catch(() => {});
+        }
+
+        await fetchEntries();
+        const updatedEntry = payload?.deletedEntry ? null : findEntry(entry.scope, entry.id, entry.characterKey);
+        if (updatedEntry && getEntryImages(updatedEntry).length > 1) {
+            openImagePicker(updatedEntry);
+        }
+
+        toastr.success(payload?.deletedEntry ? '最后一张图片已删除，条目也已移除。' : '图片已删除。');
+    } catch (error) {
+        toastr.error(`删除图片失败：${error.message}`);
     }
 }
 async function replaceEntryImage(scope, id, characterKey, file) {
