@@ -1,3 +1,7 @@
+html.kit-image-picker-open,
+body.kit-image-picker-open {
+    overflow: hidden !important;
+}
 #kit_container {
     display: flex;
     flex-direction: column;

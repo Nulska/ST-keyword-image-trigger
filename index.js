@@ -245,7 +245,11 @@ function closeImagePreview(immediate = false) {
     $(preview).fadeOut(PREVIEW_ANIMATION_MS, () => preview.remove());
 }
 
-const closeImagePicker = () => document.getElementById(IMAGE_PICKER_ID)?.remove();
+const closeImagePicker = () => {
+    document.documentElement.classList.remove('kit-image-picker-open');
+    document.body.classList.remove('kit-image-picker-open');
+    document.getElementById(IMAGE_PICKER_ID)?.remove();
+};
 
 function openImagePreview(entry) {
     closeImagePreview(true);
