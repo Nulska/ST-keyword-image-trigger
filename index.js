@@ -263,8 +263,7 @@ function findTriggeredEntries(messageId) {
     if (!Number.isFinite(targetId) || targetId < 0) return [];
     const combinedText = normalizedText(chat.slice(Math.max(0, targetId - settings.detectionDepth + 1), targetId + 1).map((message) => {
         if (!message) return '';
-        const displayText = message.extra?.display_text ?? '';
-        return `${message.name ?? ''}\n${displayText}\n${message.mes ?? ''}`;
+        return message.extra?.display_text ?? message.mes ?? '';
     }).join('\n'));
     return allEntries.filter((entry) => isEntryEnabled(entry) && getEntryKeywords(entry).some((keyword) => combinedText.includes(normalizedText(keyword))));
 }
